@@ -46,6 +46,11 @@ function makeRenderer(
         const trace = {name: traceKey.join('-') || fullAggName};
         trace.x = transpose ? values : labels;
         trace.y = transpose ? labels : values;
+        if (traceOptions.type == "pie") {
+          trace.values = values
+          trace.labels = labels
+        }
+
         return Object.assign(trace, traceOptions);
       });
 
@@ -151,6 +156,59 @@ function makeScatterRenderer(PlotlyComponent) {
   return Renderer;
 }
 
+
+function makePieRenderer(PlotlyComponent) {
+  class Renderer extends React.PureComponent {
+    render() {
+      const pivotData = new PivotData(this.props);
+      const rowKeys = pivotData.getRowKeys();
+      const colKeys = pivotData.getColKeys();
+      if (rowKeys.length === 0) {
+        rowKeys.push([]);
+      }
+      if (colKeys.length === 0) {
+        colKeys.push([]);
+      }
+
+      const data = {labels: [], values: [], text: [], type: 'pie', mode: 'markers'};
+
+      rowKeys.map(rowKey => {
+        colKeys.map(colKey => {
+          const v = pivotData.getAggregator(rowKey, colKey).value();
+          if (v !== null) {
+            data.values.push(colKey.join('-'));
+            data.labels.push(colKey.join('-'));
+            data.text.push(v);
+          }
+        });
+      });
+
+      const layout = {
+        title: this.props.rows.join('-') + ' vs ' + this.props.cols.join('-'),
+        hovermode: 'closest',
+        /* eslint-disable no-magic-numbers */
+        xaxis: {title: this.props.cols.join('-'), domain: [0.1, 1.0]},
+        yaxis: {title: this.props.rows.join('-')},
+        width: window.innerWidth / 1.5,
+        height: window.innerHeight / 1.4 - 50,
+        /* eslint-enable no-magic-numbers */
+      };
+
+      return (
+        <PlotlyComponent
+          data={[data]}
+          layout={Object.assign(layout, this.props.plotlyOptions)}
+        />
+      );
+    }
+  }
+
+  Renderer.defaultProps = PivotData.defaultProps;
+  Renderer.propTypes = PivotData.propTypes;
+
+  return Renderer;
+}
+
 export default function createPlotlyRenderers(PlotlyComponent) {
   return {
     'Grouped Column Chart': makeRenderer(
@@ -174,6 +232,11 @@ export default function createPlotlyRenderers(PlotlyComponent) {
       {type: 'bar', orientation: 'h'},
       {barmode: 'stack'},
       true
+    ),
+    'Pie Chart':  makeRenderer(
+      PlotlyComponent,
+      {type: 'pie', mode: 'markers'},
+      {}
     ),
     'Line Chart': makeRenderer(PlotlyComponent),
     'Dot Chart': makeRenderer(PlotlyComponent, {mode: 'markers'}, {}, true),
